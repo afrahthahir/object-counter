@@ -9,11 +9,18 @@ from PIL import Image
 from counter.domain.models import Prediction, Box
 from counter.domain.ports import ObjectDetector
 
+"""
+Adapters for object detection, implementing the ObjectDetector port.
+Includes a Fake detector for testing and a TFS detector for production ML models.
+"""
+
 logger = logging.getLogger(__name__)
 
 
 class FakeObjectDetector(ObjectDetector):
+    """Stub detector that always returns the same hardcoded detection. Useful for offline development."""
     def predict(self, image: BinaryIO) -> List[Prediction]:
+        """Returns a static 'cat' detection regardless of input."""
         return [Prediction(class_name='cat',
                            score=0.999190748,
                            box=Box(xmin=0.367288858, ymin=0.278333426,
@@ -23,11 +30,13 @@ class FakeObjectDetector(ObjectDetector):
 
 
 class TFSObjectDetector(ObjectDetector):
+    """Production adapter that communicates with a remote TensorFlow Serving instance."""
     def __init__(self, host, port, model):
         self.url = f"http://{host}:{port}/v1/models/{model}:predict"
         self.classes_dict = self.__build_classes_dict()
 
     def predict(self, image: BinaryIO) -> List[Prediction]:
+        """Converts image to tensors, sends request to TFS, and parses the response."""
         np_image = self.__to_np_array(image)
         predict_request = '{"instances" : %s}' % np.expand_dims(np_image, 0).tolist()        
         logger.info(f"Sending request to TFS...{self.url}")
@@ -37,12 +46,14 @@ class TFSObjectDetector(ObjectDetector):
 
     @staticmethod
     def __build_classes_dict():
+        """Loads COCO label mapping from a local JSON file."""
         with open('counter/adapters/mscoco_label_map.json') as json_file:
             labels = json.load(json_file)
             return {label['id']: label['display_name'] for label in labels}
 
     @staticmethod
     def __to_np_array(image: BinaryIO):
+        """Processes the input image: Resizes it if too large and converts it to a NumPy array."""
         MAX_DIMENSION = 1024
         image_ = Image.open(image)
         
@@ -55,6 +66,7 @@ class TFSObjectDetector(ObjectDetector):
         return np.array(image_.convert('RGB')).reshape((im_height, im_width, 3)).astype(np.uint8)
 
     def __raw_predictions_to_domain(self, raw_predictions: dict) -> List[Prediction]:
+        """Translates low-level model scores/boxes into our domain Prediction models."""
         logger.debug("Parsing raw predictions...")
         num_detections = int(raw_predictions.get('num_detections'))
         predictions = []

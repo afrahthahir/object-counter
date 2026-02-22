@@ -7,8 +7,13 @@ from flask import Flask, request, jsonify
 
 from counter import config
 
+"""
+Web Entrypoint Layer.
+Exposes the application features via a REST API using Flask.
+"""
+
 def create_app():
-    
+    """Initializes the Flask application and seeds it with real or fake actions."""
     app = Flask(__name__)
     
     count_action = config.get_count_action()
@@ -16,6 +21,10 @@ def create_app():
     
     @app.route('/object-count', methods=['POST'])
     def object_detection():
+        """
+        Receives an image and threshold, returns summarized counts.
+        Updates persistent storage with the new detection data.
+        """
         if 'file' not in request.files:
             return jsonify({"error": "No file part in the request"}), 400
         
@@ -35,6 +44,10 @@ def create_app():
 
     @app.route('/object-prediction', methods=['POST'])
     def object_prediction():
+        """
+        Receives an image and threshold, returns detailed predictions.
+        Does NOT update persistent storage.
+        """
         if 'file' not in request.files:
             return jsonify({"error": "No file part in the request"}), 400
             
@@ -55,5 +68,6 @@ def create_app():
     return app
 
 if __name__ == '__main__':
+    # Start the Flask development server
     app = create_app()
     app.run('0.0.0.0', debug=True)
