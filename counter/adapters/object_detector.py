@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import List, BinaryIO
 
 import numpy as np
@@ -7,6 +8,8 @@ from PIL import Image
 
 from counter.domain.models import Prediction, Box
 from counter.domain.ports import ObjectDetector
+
+logger = logging.getLogger(__name__)
 
 
 class FakeObjectDetector(ObjectDetector):
@@ -27,7 +30,7 @@ class TFSObjectDetector(ObjectDetector):
     def predict(self, image: BinaryIO) -> List[Prediction]:
         np_image = self.__to_np_array(image)
         predict_request = '{"instances" : %s}' % np.expand_dims(np_image, 0).tolist()        
-        print(f"Sending request to TFS...{self.url}")
+        logger.info(f"Sending request to TFS...{self.url}")
         response = requests.post(self.url, data=predict_request)
         predictions = response.json()['predictions'][0]
         return self.__raw_predictions_to_domain(predictions)
@@ -40,12 +43,19 @@ class TFSObjectDetector(ObjectDetector):
 
     @staticmethod
     def __to_np_array(image: BinaryIO):
+        MAX_DIMENSION = 1024
         image_ = Image.open(image)
+        
+        # Image preprocessing: Resize if image is too large
+        if max(image_.size) > MAX_DIMENSION:
+            logger.info(f"Resizing image from {image_.size} to fit within {MAX_DIMENSION}px")
+            image_.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.Resampling.LANCZOS)
+            
         (im_width, im_height) = image_.size
-        return np.array(image_.getdata()).reshape((im_height, im_width, 3)).astype(np.uint8)
+        return np.array(image_.convert('RGB')).reshape((im_height, im_width, 3)).astype(np.uint8)
 
     def __raw_predictions_to_domain(self, raw_predictions: dict) -> List[Prediction]:
-        print("Parsing raw predictions...")
+        logger.debug("Parsing raw predictions...")
         num_detections = int(raw_predictions.get('num_detections'))
         predictions = []
         for i in range(0, num_detections):
@@ -55,5 +65,5 @@ class TFSObjectDetector(ObjectDetector):
             detection_class = raw_predictions['detection_classes'][i]
             class_name = self.classes_dict[detection_class]
             predictions.append(Prediction(class_name=class_name, score=detection_score, box=box))
-        print(predictions)
+        logger.debug(f"Predictions: {predictions}")
         return predictions

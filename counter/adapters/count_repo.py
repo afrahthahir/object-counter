@@ -87,11 +87,11 @@ class CountPostgresRepo(ObjectCountRepo):
     def update_values(self, new_values: List[ObjectCount]):
         with self.__session_factory() as session:
             for value in new_values:
-                item = session.get(ObjectCountEntity, value.object_class)
-                if item:
-                    item.count += value.count
+                # Optimized atomic upsert using session logic
+                item = session.merge(ObjectCountEntity(object_class=value.object_class))
+                if item.count is None:
+                    item.count = value.count
                 else:
-                    item = ObjectCountEntity(object_class=value.object_class, count=value.count)
-                    session.add(item)
+                    item.count += value.count
             session.commit()
 

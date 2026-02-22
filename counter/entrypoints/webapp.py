@@ -16,9 +16,18 @@ def create_app():
     
     @app.route('/object-count', methods=['POST'])
     def object_detection():
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part in the request"}), 400
         
-        threshold = float(request.form.get('threshold', 0.5))
         uploaded_file = request.files['file']
+        if uploaded_file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+
+        try:
+            threshold = float(request.form.get('threshold', 0.5))
+        except ValueError:
+            return jsonify({"error": "Threshold must be a number"}), 400
+
         image = BytesIO()
         uploaded_file.save(image)
         count_response = count_action.execute(image, threshold)
@@ -26,8 +35,18 @@ def create_app():
 
     @app.route('/object-prediction', methods=['POST'])
     def object_prediction():
-        threshold = float(request.form.get('threshold', 0.5))
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part in the request"}), 400
+            
         uploaded_file = request.files['file']
+        if uploaded_file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+
+        try:
+            threshold = float(request.form.get('threshold', 0.5))
+        except ValueError:
+            return jsonify({"error": "Threshold must be a number"}), 400
+
         image = BytesIO()
         uploaded_file.save(image)
         predictions = find_action.execute(image, threshold)
