@@ -1,4 +1,4 @@
-# NIQ Innovation Enablement - Object Counter Challenge
+# Object Counter Challenge
 
 The goal of this repo is to demonstrate how to apply Hexagonal Architecture in a Machine Learning based system.
 This application consists of a Flask API that receives an image and a threshold and returns the number of objects detected, as well as detailed object predictions.
