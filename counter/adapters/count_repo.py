@@ -1,3 +1,4 @@
+# Adapters for persisting object counts across different storage backends.
 from typing import List
 
 from pymongo import MongoClient
@@ -53,4 +54,44 @@ class CountMongoDBRepo(ObjectCountRepo):
         counter_col = self.__get_counter_col()
         for value in new_values:
             counter_col.update_one({'object_class': value.object_class}, {'$inc': {'count': value.count}}, upsert=True)
+
+
+from sqlalchemy import create_engine, Column, String, Integer, select
+from sqlalchemy.orm import declarative_base, sessionmaker
+
+Base = declarative_base()
+
+
+class ObjectCountEntity(Base):
+    __tablename__ = 'object_counts'
+    object_class = Column(String, primary_key=True)
+    count = Column(Integer, default=0)
+
+
+# Relational database adapter using SQLAlchemy for PostgreSQL/MySQL support.
+class CountPostgresRepo(ObjectCountRepo):
+    def __init__(self, connection_string):
+        self.__engine = create_engine(connection_string)
+        Base.metadata.create_all(self.__engine)
+        self.__session_factory = sessionmaker(bind=self.__engine)
+
+    def read_values(self, object_classes: List[str] = None) -> List[ObjectCount]:
+        with self.__session_factory() as session:
+            query = select(ObjectCountEntity)
+            if object_classes:
+                query = query.filter(ObjectCountEntity.object_class.in_(object_classes))
+            
+            items = session.execute(query).scalars().all()
+            return [ObjectCount(item.object_class, item.count) for item in items]
+
+    def update_values(self, new_values: List[ObjectCount]):
+        with self.__session_factory() as session:
+            for value in new_values:
+                item = session.get(ObjectCountEntity, value.object_class)
+                if item:
+                    item.count += value.count
+                else:
+                    item = ObjectCountEntity(object_class=value.object_class, count=value.count)
+                    session.add(item)
+            session.commit()
 
