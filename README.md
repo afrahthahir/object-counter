@@ -1,131 +1,95 @@
 # NIQ Innovation Enablement - Object Counter Challenge
 
-The goal of this repo is demonstrate how to apply Hexagonal Architecture in a ML based system.
+The goal of this repo is to demonstrate how to apply Hexagonal Architecture in a Machine Learning based system.
+This application consists of a Flask API that receives an image and a threshold and returns the number of objects detected, as well as detailed object predictions.
 
-This application consists in a Flask API that receives an image and a threshold and returns the number of objects detected in the image.
+## 🚀 Quick Start (Automated with Makefile)
+
+To simplify the setup, use the provided `Makefile`.
+
+### 1. Setup Environment
+```bash
+make setup
+source .venv/bin/activate
+```
+
+### 2. Download and Extract Model
+```bash
+make download-model
+```
+
+### 3. Run Dependencies (Docker)
+```bash
+make run-tf    # Starts TensorFlow Serving
+make run-db    # Starts MongoDB
+```
+
+### 4. Run the Application
+```bash
+make run       # Runs in dev mode (uses Fake detector)
+# OR
+make run-prod  # Runs in production mode (requires TF and DB)
+```
+
+### 5. Run Tests
+```bash
+make test
+```
+
+---
+
+## 🏗️ Architecture
 
 The application is composed of three layers:
 
-- **entrypoints**: Exposes the API and receives the requests. It is also responsible for validating the requests and returning the responses.
+- **entrypoints**: Exposes the API and receives requests.
+- **adapters**: Communicates with external services (TF Serving, MongoDB, PostgreSQL).
+- **domain**: Business logic (orchestrating detections and counts).
 
-- **adapters**: Communicates with external services. It is responsible for translating the domain objects to the external services objects and vice-versa.
+Features added in this version:
+- New `/object-prediction` endpoint for detailed JSON results.
+- Relational database support (PostgreSQL).
+- Image preprocessing (scaling) for better performance.
+- Consolidated task automation via `Makefile`.
 
-- **domain**: Business logic. It is responsible for orchestrating the calls to the external services and for applying the business rules.
+## 📡 API Usage
 
-The model used in this example has been taken from 
-[Kaggle](https://www.kaggle.com/models/google/mobilenet-v2/tensorFlow1/openimages-v4-ssd-mobilenet-v2/1)
-
-
-## Instructions to setup the model (Unix)
+### Object Count
+Returns an overall summary of detected objects.
 ```bash
-mkdir -p tmp/model/ssd_mobilenet_v2/1
-curl -L -o tmp/model.tar.gz \
-  http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v2_coco_2018_03_29.tar.gz
-tar -xzvf tmp/model.tar.gz -C tmp/model
-mv \
-    tmp/model/ssd_mobilenet_v2_coco_2018_03_29/saved_model/saved_model.pb \
-    tmp/model/ssd_mobilenet_v2/1
-chmod -R 777 tmp/model
-rm tmp/model.tar.gz
-rm -rf tmp/model/ssd_mobilenet_v2_coco_2018_03_29
+curl -F "threshold=0.9" -F "file=@resources/images/boy.jpg" http://localhost:5000/object-count
 ```
 
-By the end you should have the following structure:
- ```
- tmp/
-  model/
-    ssd_mobilenet_v2/
-        1/
-        saved_model.pb
- ```
-
-## Setup and run Tensorflow Serving
-
-### For unix systems
+### Object Prediction
+Returns a detailed list of every object with its score and box coordinates.
 ```bash
-num_physical_cores=$(lscpu --all --parse=SOCKET,CORE | grep -v '^#' | uniq | wc -l)
-
-docker run --rm -d \
-    --name=tfserving \
-    -p 8501:8501 \
-    --mount type=bind,source=$(pwd)/tmp/model,target=/models \
-    -e OMP_NUM_THREADS=$num_physical_cores \
-    -e TENSORFLOW_INTRA_OP_PARALLELISM=$num_physical_cores \
-    -e MODEL_NAME=ssd_mobilenet_v2 \
-    tensorflow/serving
+curl -F "threshold=0.9" -F "file=@resources/images/boy.jpg" http://localhost:5000/object-prediction
 ```
 
-### For Windows (Powershell)
-```powershell
-$num_physical_cores=(Get-WmiObject Win32_Processor | Select-Object NumberOfCores).NumberOfCores
+## 🧪 Testing
 
-docker run --rm -d `
-    --name=tfserving `
-    -p 8501:8501 `
-    -v "$pwd\tmp\model:/models" `
-    -e OMP_NUM_THREADS=$num_physical_cores `
-    -e TENSORFLOW_INTRA_OP_PARALLELISM=$num_physical_cores `
-    -e MODEL_NAME=ssd_mobilenet_v2 `
-    tensorflow/serving
-```
-
-## Running MongoDB
+We use `pytest` for testing. The suite includes:
+- **Unit Tests**: Domain logic verification with mocks.
+- **Integration Tests**: Webapp and database adapter verification (using SQLite for SQL tests).
 
 ```bash
-docker run --rm --name test-mongo -p 27017:27017 -d mongo:latest
+make test
 ```
 
-## Setup virtualenv (Python >= 3.10)
+---
 
-Unix:
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-export PYTHONPATH=.
-```
+## 🐳 Docker Compose (Alternative)
 
-Powershell:
-```powershell
-python3 -m venv .venv
-.venv\scripts\Activate.ps1
-pip install -r requirements.txt
-$Env:PYTHONPATH = "."
-```
-
-
-## Run the application
-
-### Using fakes
-```bash
-python -m counter.entrypoints.webapp
-```
-
-### Using real services in docker containers
-
-Unix
-```bash
-ENV=prod python -m counter.entrypoints.webapp
-```
-Powershell: 
-```powershell
-$env:ENV = "prod"
-python -m counter.entrypoints.webapp
-```
-
-## Call the service
+For a fully containerized deployment of the entire stack:
 
 ```bash
- curl -F "threshold=0.9" -F "file=@resources/images/boy.jpg" http://localhost:5000/object-count
- curl -F "threshold=0.9" -F "file=@resources/images/cat.jpg" http://localhost:5000/object-count
- curl -F "threshold=0.9" -F "file=@resources/images/food.jpg" http://localhost:5000/object-count 
+docker-compose up --build
 ```
 
-> [!TIP]
-> If you face service connectivity issues on Windows, try replacing "localhost" with "127.0.0.1" globally
+---
 
-## Run the tests
+## 📂 Documentation
 
-```
-pytest
-```
+- [Proposed Improvements](./improvements.md): Detailed list of all architectural and performance enhancements.
+- [Proposed Multi-Model Support](./multi_model_support.md): Roadmap for supporting multiple internal models.
+- [Proposed Testing Roadmap](./testing_enhancements.md): Proposals for future testing strategies (E2E, Load, Security).
